@@ -303,6 +303,85 @@ export default function Admin() {
      }
   };
 
+  const handleFileUpload = async (event, itemId) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Resetear input localmente para permitir subir el mismo archivo si hay error
+    event.target.value = null;
+
+    if (file.size > 5 * 1024 * 1024) { // límite de 5MB
+       alert("El archivo es demasiado pesado (máximo 5MB).");
+       return;
+    }
+
+    setBusyItems(prev => ({ ...prev, [itemId]: true }));
+
+    try {
+      const extension = file.name.split('.').pop().toLowerCase();
+      const contentType = file.type;
+
+      // Convertir a base64 localmente
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+         try {
+            const result = reader.result;
+            const base64String = result.split(',')[1];
+            
+            console.log(`[Admin Upload] 📤 Subiendo archivo manual: ${file.name}`);
+            const response = await fetch('/api/save-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ itemId, base64Data: base64String, contentType, extension })
+            });
+            
+            // Check HTML vite proxy bug fallback
+            const respContentType = response.headers.get("content-type");
+            if (respContentType && respContentType.includes("text/html")) {
+               throw new Error("Dev Local Issue: /api devolvió HTML.");
+            }
+
+            if (!response.ok) {
+               const errData = await response.json();
+               throw new Error(errData.error || "Error subiendo archivo");
+            }
+
+            const data = await response.json();
+            const publicUrl = data.publicUrl;
+            console.log(`[Admin Upload] ✅ Subida terminada. URL: ${publicUrl}`);
+
+            const { error: dbError } = await supabase
+              .from('items')
+              .update({ image_url: publicUrl })
+              .eq('id', itemId);
+
+            if (dbError) throw dbError;
+
+            // Actualizar vista local
+            setItems(prev => prev.map(i => i.id === itemId ? { ...i, image_url: publicUrl } : i));
+            setImageErrors(prev => { const n = { ...prev }; delete n[itemId]; return n; });
+            
+         } catch (e) {
+            console.error(e);
+            alert("Error procesando imagen: " + e.message);
+         } finally {
+            setBusyItems(prev => ({ ...prev, [itemId]: false }));
+         }
+      };
+      
+      reader.onerror = () => {
+         throw new Error("No se pudo leer el archivo localmente.");
+      };
+
+      reader.readAsDataURL(file);
+
+    } catch (e) {
+      console.error(e);
+      alert("Error al subir archivo: " + e.message);
+      setBusyItems(prev => ({ ...prev, [itemId]: false }));
+    }
+  };
+
   const handleDeleteImage = async (itemId, currentUrl) => {
      if(!window.confirm("¿Eliminar imagen actual de forma permanente?")) return;
      
@@ -435,6 +514,16 @@ export default function Admin() {
                           💾 Guardar Seleccionada
                         </button>
                     )}
+                    <label style={{ display:'inline-block', padding: '8px 12px', background: '#ec407a', color: 'white', border: 'none', borderRadius: '6px', cursor: busyItems[i.id] ? 'wait' : 'pointer', fontSize:'13px', fontWeight:'bold' }}>
+                      📁 Subir Local
+                      <input 
+                        type="file" 
+                        accept=".png,.jpg,.jpeg,.webp,.gif" 
+                        style={{ display: 'none' }} 
+                        disabled={busyItems[i.id]}
+                        onChange={(e) => handleFileUpload(e, i.id)} 
+                      />
+                    </label>
                     {!isBadImageUrl(i.image_url) && (
                         <button disabled={busyItems[i.id]} onClick={() => handleDeleteImage(i.id, i.image_url)} style={{ padding: '8px 12px', background: '#f44336', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px' }}>
                           🗑️ Eliminar

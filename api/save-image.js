@@ -6,20 +6,30 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { url, itemId } = req.body;
-    if (!url || !itemId) {
-      return res.status(400).json({ error: 'Falta url o itemId' });
+    const { url, itemId, base64Data, contentType, extension } = req.body;
+    if ((!url && !base64Data) || !itemId) {
+      return res.status(400).json({ error: 'Falta payload (url/base64) o itemId' });
     }
 
-    console.log(`\n[Backend SaveImage] ⬇️ Descargando imagen externa...`);
-    const imgResponse = await fetch(url);
-    if (!imgResponse.ok) {
-      console.error(`[Backend SaveImage] ❌ Falló fetch de imagen. Status:`, imgResponse.status);
-      throw new Error(`Falló la descarga remota de la imagen externa.`);
-    }
+    let buffer;
+    let actualContentType = 'image/png';
+    let ext = 'png';
 
-    const arrayBuffer = await imgResponse.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    if (url) {
+      console.log(`\n[Backend SaveImage] ⬇️ Descargando imagen externa...`);
+      const imgResponse = await fetch(url);
+      if (!imgResponse.ok) {
+        console.error(`[Backend SaveImage] ❌ Falló fetch de imagen. Status:`, imgResponse.status);
+        throw new Error(`Falló la descarga remota de la imagen externa.`);
+      }
+      const arrayBuffer = await imgResponse.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+    } else {
+      console.log(`\n[Backend SaveImage] ⬇️ Despaquetizando archivo local en Base64...`);
+      buffer = Buffer.from(base64Data, 'base64');
+      actualContentType = contentType || 'image/png';
+      ext = extension || 'png';
+    }
 
     console.log("🔑 Usando service role key en backend");
     const supabase = createClient(
@@ -27,13 +37,13 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    const fileName = `${Date.now()}.png`;
+    const fileName = `${Date.now()}.${ext.replace(/[^a-zA-Z0-9]/g, '')}`;
     const filePath = `${itemId}/${fileName}`;
 
     const { error: uploadError } = await supabase.storage
       .from('images')
       .upload(filePath, buffer, {
-        contentType: 'image/png',
+        contentType: actualContentType,
         upsert: true
       });
 
