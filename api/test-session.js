@@ -14,24 +14,24 @@ export default async function handler(req, res) {
       process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
     );
 
-    console.log("[Backend Test] Generando sesión...");
-    const items = await getSessionItems(supabase);
+    console.log("[Backend Test] Generando sesión dividida por fases...");
+    const sessionData = await getSessionItems(supabase);
 
-    // Formatear resumen rápido para lectura humana
+    // Formatear resumen analítico para Frontend y Developers
     const summary = {
-      total_items: items.length,
-      news_count: items.filter(i => i.status === 'new' && !i.isExposition).length,
-      exposure_frames: items.filter(i => i.status === 'new' && i.isExposition).length,
-      learnings_count: items.filter(i => i.status === 'learning').length,
-      mastereds_review: items.filter(i => i.isReview).length,
+      exposure_total: sessionData.exposure_queue.length,
+      evaluation_total: sessionData.evaluation_queue.length,
+      news_in_exposure: sessionData.exposure_queue.filter(i => i.status === 'new').length,
+      news_in_evaluation: sessionData.evaluation_queue.filter(i => i.status === 'new').length
     };
 
     console.log("[Backend Test] Sesión generada:", summary);
 
-    // Devolvemos Payload limpio en JSON
+    // Devolvemos Payload dividido según reglas
     return res.status(200).json({
        _analytics: summary,
-       session_queue: items
+       exposure_queue: sessionData.exposure_queue,
+       evaluation_queue: sessionData.evaluation_queue
     });
     
   } catch (error) {

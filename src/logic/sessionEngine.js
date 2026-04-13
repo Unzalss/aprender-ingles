@@ -3,7 +3,7 @@
  * Se ejecuta al iniciar una sesión para calcular el array de 30 elementos óptimos.
  */
 export async function getSessionItems(supabaseClient) {
-  // 1. Extraer ítems válidos (ignoramos los que aún no tengan imagen salvada)
+  // 1. Extraer ítems válidos (Filtro base DB)
   const { data, error } = await supabaseClient
     .from('items')
     .select('*')
@@ -11,101 +11,93 @@ export async function getSessionItems(supabaseClient) {
 
   if (error) throw error;
 
+  // 1B. Filtro estricto aplicación: Cero palabras sin array_length
+  const validData = data.filter(i => i.image_url && i.image_url.trim() !== '');
+  if (validData.length === 0) throw new Error("No hay items con imagen asimilada en BD.");
+
   // 2. Clasificación Base
-  const mastereds = data.filter(i => i.status === 'mastered');
-  let learnings = data.filter(i => i.status === 'learning');
-  let news = data.filter(i => i.status === 'new' || !i.status);
+  const mastereds = validData.filter(i => i.status === 'mastered');
+  let learnings = validData.filter(i => i.status === 'learning');
+  let news = validData.filter(i => i.status === 'new' || !i.status);
 
-  // 3. Extracción de News limitados a 3 (barajados al azar)
-  news = news.sort(() => 0.5 - Math.random()).slice(0, 3);
-  
-  const sessionQueue = [];
-
-  // PUSH NEWS: 3 Exposiciones (mudas/estudio) + 1 Evaluación
-  news.forEach(n => {
-    sessionQueue.push({ ...n, isExposition: true, sessionUuid: crypto.randomUUID() });
-    sessionQueue.push({ ...n, isExposition: true, sessionUuid: crypto.randomUUID() });
-    sessionQueue.push({ ...n, isExposition: true, sessionUuid: crypto.randomUUID() });
-    sessionQueue.push({ ...n, isExposition: false, sessionUuid: crypto.randomUUID() });
-  });
-
-  const slotsTaken = sessionQueue.length;
-  const slotsRemaining = 30 - slotsTaken;
-
-  // 4. Selección de Learnings priorizados
-  // Orden = fallados o con 0 racha primero. Luego, los que tengan un last_seen_at más antiguo (nulls primero)
   let priorityLearnings = learnings.sort((a, b) => {
      const countA = a.correct_count || 0;
      const countB = b.correct_count || 0;
-
      if (countA === 0 && countB !== 0) return -1;
      if (countB === 0 && countA !== 0) return 1;
-     
-     // Empate: miramos antigüedad de vista
      const dA = a.last_seen_at ? new Date(a.last_seen_at).getTime() : 0;
      const dB = b.last_seen_at ? new Date(b.last_seen_at).getTime() : 0;
      return dA - dB;
   });
 
-  // Intentamos rellenar los huecos iniciales con learnings únicos priorizados
-  const initialRemaining = 30 - sessionQueue.length;
-  const selectedLearnings = priorityLearnings.slice(0, initialRemaining);
-  selectedLearnings.forEach(L => {
-    sessionQueue.push({ ...L, isExposition: false, sessionUuid: crypto.randomUUID() });
-  });
+  // TAREA 2: ====== BLOQUE EXPOSICION (30 FIJOS) ======
+  let exposureQueue = [];
+  let expPool = [...news, ...priorityLearnings, ...mastereds];
+  if(expPool.length === 0) expPool = [...validData]; // Paracaídas final
 
-  // 4B. PADDING FORZADO RIGUROSO PARA GARANTIZAR 30 ITEMS EXACTOS SI LA DB ESTÁ 'SECA'
-  // Si no había learnings suficientes, repetimos internamente los pocos que haya, o duplicamos news.
-  const paddingPool = [...priorityLearnings, ...news];
-  // Failsafe por si la base está formada por 100% mastereds (imposible pero por si acaso)
-  if (paddingPool.length === 0) {
-      paddingPool.push(...data);
+  // Intentamos nutrir el motor de items diversos primero 
+  let tNews = [...news].sort(()=>0.5-Math.random()).slice(0, 3); // Límite de 3 nuevas
+  let selectedForExp = [...tNews, ...priorityLearnings, ...mastereds].slice(0, 30);
+  selectedForExp.forEach(i => exposureQueue.push({ ...i, isExposition: true, sessionUuid: crypto.randomUUID() }));
+
+  // Cierre de array con Padding garantizado
+  while(exposureQueue.length < 30) {
+      const rd = expPool[Math.floor(Math.random() * expPool.length)];
+      exposureQueue.push({ ...rd, isExposition: true, sessionUuid: crypto.randomUUID() });
   }
-
-  while (sessionQueue.length < 30) {
-      const randomItem = paddingPool[Math.floor(Math.random() * paddingPool.length)];
-      // Las repeticiones forzadas operan como "repaso/evaluación"
-      sessionQueue.push({ ...randomItem, isExposition: false, isReview: true, sessionUuid: crypto.randomUUID() });
-  }
-
-  // Prevenir desbordes si la base de cálculo de news estirara de más accidentalmente
-  if (sessionQueue.length > 30) {
-      sessionQueue.length = 30;
-  }
-
-  // 5. Mezcla y Separación Espaciada (anti-colapso consecutivo)
-  // Intenta separar las interacciones de un mismo item lo máximo posible.
-  let finalQueue = [];
-  let tempQueue = [...sessionQueue].sort(() => 0.5 - Math.random());
   
-  while(tempQueue.length > 0) {
-     let placed = false;
-     for (let i = 0; i < tempQueue.length; i++) {
-        const item = tempQueue[i];
-        const lastPlaced = finalQueue.length > 0 ? finalQueue[finalQueue.length - 1] : null;
+  if(exposureQueue.length > 30) exposureQueue.length = 30; // Failsafe
+  exposureQueue = exposureQueue.sort(() => 0.5 - Math.random());
 
-        // Si el elemento es distinto al último que pusimos en cola, es legal colocarlo.
-        if (!lastPlaced || lastPlaced.id !== item.id) {
-           finalQueue.push(item);
-           tempQueue.splice(i, 1);
-           placed = true;
-           break;
-        }
-     }
-     
-     // Failsafe: Si todos los que quedan son el mismo bloque (ej al final), lo fuerza arrastrándolos.
-     if (!placed) {
-        finalQueue.push(tempQueue.splice(0, 1)[0]); 
-     }
+  // TAREA 3: ====== BLOQUE EVALUACION (20 FIJOS) ======
+  let evaluationQueue = [];
+  let evPool = [...priorityLearnings, ...news, ...mastereds];
+  if (evPool.length === 0) evPool = [...validData];
+
+  // Prioridad evaluación: los news que acaban de ver + peores learnings
+  let evalCandidates = [...tNews, ...priorityLearnings, ...mastereds].slice(0, 20);
+  evalCandidates.forEach(i => evaluationQueue.push({ ...i, isExposition: false, sessionUuid: crypto.randomUUID() }));
+
+  // Cierre de array con Padding garantizado
+  while(evaluationQueue.length < 20) {
+      const rd = evPool[Math.floor(Math.random() * evPool.length)];
+      evaluationQueue.push({ ...rd, isExposition: false, isReview: true, sessionUuid: crypto.randomUUID() });
   }
 
-  // Mantenimiento de BD de un solo lote: Actulizamos la fecha global de vista
-  const uniqueIdsAssigned = [...new Set(finalQueue.map(f => f.id))];
+  if(evaluationQueue.length > 20) evaluationQueue.length = 20; // Failsafe
+  evaluationQueue = evaluationQueue.sort(() => 0.5 - Math.random());
+
+  // Anti-Colisión simple (Asegurar que items no se peguen identicos)
+  const antiCollision = (arr) => {
+     let temp = [...arr];
+     let res = [];
+     while(temp.length > 0) {
+        let placed = false;
+        for (let i = 0; i < temp.length; i++) {
+           const lastPlaced = res.length > 0 ? res[res.length - 1] : null;
+           if (!lastPlaced || lastPlaced.id !== temp[i].id) {
+              res.push(temp[i]);
+              temp.splice(i, 1);
+              placed = true;
+              break;
+           }
+        }
+        if (!placed) res.push(temp.splice(0, 1)[0]);
+     }
+     return res;
+  };
+
+  exposureQueue = antiCollision(exposureQueue);
+  evaluationQueue = antiCollision(evaluationQueue);
+
+  // Mantenimiento de BD Batch
+  const allFinalIds = [...exposureQueue, ...evaluationQueue].map(f => f.id);
+  const uniqueIdsAssigned = [...new Set(allFinalIds)];
   if (uniqueIdsAssigned.length > 0) {
       await supabaseClient.from('items').update({ last_seen_at: new Date().toISOString() }).in('id', uniqueIdsAssigned);
   }
 
-  return finalQueue;
+  return { exposure_queue: exposureQueue, evaluation_queue: evaluationQueue };
 }
 
 /**
