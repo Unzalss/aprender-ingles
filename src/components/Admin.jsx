@@ -14,6 +14,13 @@ export default function Admin() {
   const [imageErrors, setImageErrors] = useState({}); // { itemId: boolean }
   const [searchPages, setSearchPages] = useState({}); // { itemId: pagina_actual }
 
+  // Estados Formulario de Nueva Palabra
+  const [newWordLabel, setNewWordLabel] = useState('');
+  const [newWordType, setNewWordType] = useState('object');
+  const [newWordCategory, setNewWordCategory] = useState('OBJETOS CASA');
+  const [newWordTranslationES, setNewWordTranslationES] = useState('');
+  const [creatingWord, setCreatingWord] = useState(false);
+
   const fetchItems = async () => {
     setLoading(true);
     try {
@@ -29,6 +36,45 @@ export default function Admin() {
   };
 
   useEffect(() => { fetchItems(); }, []);
+
+  const handleCreateWord = async () => {
+    const cleanLabel = newWordLabel.trim().toLowerCase();
+    if (!cleanLabel) return alert("El nombre en inglés no puede estar vacío.");
+
+    if (items.some(i => i.label.toLowerCase() === cleanLabel)) {
+       return alert("Esa palabra ya existe en el catálogo. ¡No duplicados!");
+    }
+
+    setCreatingWord(true);
+    try {
+      const payload = {
+        id: crypto.randomUUID(),
+        label: cleanLabel,
+        type: newWordType,
+        category: newWordCategory,
+        translation_es: newWordTranslationES.trim() || null,
+        ambiguity_level: 'low'
+      };
+
+      const { data, error } = await supabase.from('items').insert([payload]).select();
+      if (error) throw error;
+      
+      setNewWordLabel('');
+      setNewWordTranslationES('');
+      
+      if (data && data.length > 0) {
+         setItems(prev => [...prev, data[0]]);
+      } else {
+         fetchItems();
+      }
+
+    } catch(e) {
+      console.error(e);
+      alert("Fallo al crear la palabra: " + e.message);
+    } finally {
+      setCreatingWord(false);
+    }
+  };
 
   const handleSeedCatalog = async () => {
     const confirm = window.confirm("¿Volcar catálogo inicial de 300+ palabras saltando los ya existentes?");
@@ -444,6 +490,50 @@ export default function Admin() {
           </button>
         </div>
         <div style={{fontSize:'14px', color:'#388E3C', fontWeight:'bold'}}>Integración Supabase Storage Activa ✅</div>
+      </div>
+
+      {/* BLOQUE DE CREAR NUEVA PALABRA */}
+      <div style={{ background: '#f5f7fa', padding: '15px 20px', borderRadius: '12px', border: '1px solid #e0e5ec', marginBottom: '20px', display: 'flex', gap: '15px', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div style={{ flex: '1 1 200px' }}>
+          <label style={{display:'block', fontSize:'13px', fontWeight:'bold', marginBottom:'5px', color:'#555'}}>Palabra (Inglés) *</label>
+          <input type="text" value={newWordLabel} onChange={e => setNewWordLabel(e.target.value)} placeholder="Ej. pencil" style={{width:'100%', padding:'10px', borderRadius:'6px', border:'1px solid #ccc', boxSizing:'border-box'}} />
+        </div>
+        
+        <div style={{ flex: '1 1 120px' }}>
+          <label style={{display:'block', fontSize:'13px', fontWeight:'bold', marginBottom:'5px', color:'#555'}}>Tipo *</label>
+          <select value={newWordType} onChange={e => setNewWordType(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}}>
+            <option value="object">object</option>
+            <option value="word">word</option>
+            <option value="command">command</option>
+          </select>
+        </div>
+
+        <div style={{ flex: '1 1 200px' }}>
+          <label style={{display:'block', fontSize:'13px', fontWeight:'bold', marginBottom:'5px', color:'#555'}}>Categoría *</label>
+          <select value={newWordCategory} onChange={e => setNewWordCategory(e.target.value)} style={{width:'100%', padding:'10px', borderRadius:'6px', border:'1px solid #ccc'}}>
+            <option value="OBJETOS CASA">OBJETOS CASA</option>
+            <option value="PERSONAS / FAMILIA">PERSONAS / FAMILIA</option>
+            <option value="ANIMALES">ANIMALES</option>
+            <option value="COLORES">COLORES</option>
+            <option value="NÚMEROS">NÚMEROS</option>
+            <option value="FORMAS / TAMAÑOS">FORMAS / TAMAÑOS</option>
+            <option value="VERBOS BÁSICOS">VERBOS BÁSICOS</option>
+            <option value="ACCIONES DE CASA">ACCIONES DE CASA</option>
+            <option value="POSICIONES / PREPOSICIONES">POSICIONES / PREPOSICIONES</option>
+            <option value="ADJETIVOS / ESTADOS">ADJETIVOS / ESTADOS</option>
+          </select>
+        </div>
+
+        <div style={{ flex: '1 1 200px' }}>
+          <label style={{display:'block', fontSize:'13px', fontWeight:'bold', marginBottom:'5px', color:'#555'}}>Traducción (Opcional)</label>
+          <input type="text" value={newWordTranslationES} onChange={e => setNewWordTranslationES(e.target.value)} placeholder="Ej. lápiz" style={{width:'100%', padding:'10px', borderRadius:'6px', border:'1px solid #ccc', boxSizing:'border-box'}} />
+        </div>
+
+        <div style={{ flex: '0 0 auto' }}>
+          <button onClick={handleCreateWord} disabled={creatingWord} style={{ background: '#388E3C', color: 'white', padding: '10px 20px', border: 'none', borderRadius: '6px', cursor: creatingWord ? 'wait' : 'pointer', fontWeight: 'bold' }}>
+             {creatingWord ? 'Creando...' : '➕ Añadir Palabra'}
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gap: '20px' }}>
