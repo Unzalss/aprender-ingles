@@ -12,7 +12,7 @@ export default function Admin() {
   const [selectedCandidate, setSelectedCandidate] = useState({}); // { itemId: url }
   const [busyItems, setBusyItems] = useState({}); // { itemId: boolean }
   const [imageErrors, setImageErrors] = useState({}); // { itemId: boolean }
-  const [pixabayPages, setPixabayPages] = useState({}); // { itemId: pagina_actual }
+  const [searchPages, setSearchPages] = useState({}); // { itemId: pagina_actual }
 
   const fetchItems = async () => {
     setLoading(true);
@@ -85,81 +85,111 @@ export default function Admin() {
       fetchItems();
     } catch (e) {
       console.error(e);
-      alert("Error en el volcado del catálogo: " + e.message);
     }
     setLoading(false);
   };
 
-  // MOCKS Y LÓGICA DE IMÁGENES (Fase 3: Búsqueda Pixabay Activa)
+  const buildSearchQuery = (item) => {
+    const label = item.label.toLowerCase();
+
+    // Casos especiales mapeados (Verbos difíciles y rutinarios)
+    const verbMap = {
+      'sit': 'person sitting on chair indoors simple',
+      'eat': 'person eating food simple',
+      'sleep': 'person sleeping in bed simple',
+      'run': 'person running outdoors simple',
+      'open': 'person opening door simple',
+      'close': 'person closing door simple',
+      'wash hands': 'person washing hands sink simple',
+      'brush teeth': 'person brushing teeth bathroom simple',
+      'jump': 'person jumping simple',
+      'walk': 'person walking outdoors simple',
+      'talk': 'people talking simple',
+      'say': 'person speaking simple',
+      'drink': 'person drinking water simple',
+      'look': 'person looking simple'
+    };
+
+    if (verbMap[label]) {
+      return verbMap[label];
+    }
+
+    if (item.category === 'COLORES') {
+      return `${label} color background solid minimal no objects`;
+    }
+
+    if (item.category === 'ANIMALES') {
+      return `${label} animal full body simple background`;
+    }
+
+    if (item.type === 'object') {
+      return `${label} isolated object white background simple`;
+    }
+
+    if (item.type === 'command') {
+      return `person ${label} simple action indoors clear`;
+    }
+
+    return `${label} simple clear image`;
+  };
+
+  // MOCKS Y LÓGICA DE IMÁGENES (Fase 4: Búsqueda Semántica Pexels Activa)
   const handleSearchImages = async (item, forceReset = false) => {
     setBusyItems(prev => ({ ...prev, [item.id]: true }));
     try {
-      const apiKey = import.meta.env.VITE_PIXABAY_API_KEY;
+      const apiKey = import.meta.env.VITE_PEXELS_API_KEY;
       
-      if (!apiKey || apiKey.includes("tu_pixabay_key") || apiKey.trim() === "") {
-        console.error("❌ Falta VITE_PIXABAY_API_KEY. Debes configurar la clave real en las Environment Variables de Vercel (y regenerar el despliegue) o en tu .env.local local.");
-        alert("Falta configurar la API Key real de Pixabay. Revisa la consola.");
+      if (!apiKey || apiKey.includes("tu_pexels_key") || apiKey.trim() === "") {
+        console.error("❌ Falta VITE_PEXELS_API_KEY. Debes configurar la clave en las Environment Variables de Vercel (y regenerar el despliegue) o en tu .env.local local.");
+        alert("Falta configurar la API Key real de Pexels. Revisa la consola.");
         return;
       }
 
-      let currentPage = forceReset ? 1 : (pixabayPages[item.id] || 0) + 1;
-      setPixabayPages(prev => ({ ...prev, [item.id]: currentPage }));
+      let currentPage = forceReset ? 1 : (searchPages[item.id] || 0) + 1;
+      setSearchPages(prev => ({ ...prev, [item.id]: currentPage }));
 
-      // Diferenciamos estrategia: objetos directos vs verbos en acción
-      let q = "";
-      if (item.type === 'word' || item.type === 'object') {
-        q = `${item.label} cartoon cute`; // Enfocado al objeto ilustrado
-      } else {
-        q = `${item.label} kids action cartoon`; // Intentamos buscar acción
-      }
+      const q = buildSearchQuery(item);
 
       const params = new URLSearchParams({
-        key: apiKey,
-        q: q,
-        image_type: 'illustration',
-        safesearch: 'true',
-        per_page: 15, // Pedimos un poco extra para poder filtrar localmente
+        query: q,
+        per_page: 20, // Pedir buffer grande para aplicar filtrado geométrico local
         page: currentPage.toString(),
       });
 
-      console.log(`[Admin Pixabay] 🔍 Buscando en Pixabay con query: "${q}"...`);
-      const response = await fetch(`https://pixabay.com/api/?${params.toString()}`);
-      console.log(`[Admin Pixabay] 📡 Status respuesta: ${response.status}`);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("[Admin Pixabay] ❌ Texto error:", errorText);
-        throw new Error(`Error en red Pixabay: ${response.status}`);
-      }
-
-      const data = await response.json();
-      console.log(`[Admin Pixabay] 📊 Resultados brutos obtenidos:`, data.hits?.length || 0);
-
-      let results = data.hits || [];
-      
-      // Filtrado automático de apoyo (tags no deseados)
-      const badTags = ['dark', 'horror', 'abstract', 'icon', 'logo', 'background', 'seamless'];
-      results = results.filter(hit => {
-         const tags = hit.tags.toLowerCase();
-         return !badTags.some(bad => tags.includes(bad));
+      console.log(`[Admin Pexels] 🔍 Buscando en Pexels con query enriquecida: "${q}"...`);
+      const response = await fetch(`https://api.pexels.com/v1/search?${params.toString()}`, {
+         headers: { Authorization: apiKey }
       });
-
-      // Tomamos solo las mejores 5
-      const finalUrls = results.slice(0, 5).map(h => h.webformatURL);
-
-      if (finalUrls.length === 0) {
-         if (item.type !== 'word' && item.type !== 'object') {
-             alert("Pixabay apenas tiene ilustraciones claras para esta acción. Te recomendamos usar 'Generar 1' cuando esté disponible.");
-         } else {
-             alert("No se encontraron resultados claros para esta palabra.");
-         }
+      
+      if (!response.ok) {
+         const errText = await response.text();
+         console.error(`[Admin Pexels] 💥 Fallo de API: ${response.status}`, errText);
+         throw new Error(`Pexels devolvió ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`[Admin Pexels] ✅ Pexels devolvió ${data.photos?.length || 0} fotos en bruto.`);
+      
+      if (!data.photos || data.photos.length === 0) {
+         alert("No se encontraron imágenes en Pexels para esta palabra (prueba Pág 1 u otra vía).");
+         setBusyItems(prev => ({ ...prev, [item.id]: false }));
+         return;
       }
 
-      setCandidates(prev => ({ ...prev, [item.id]: finalUrls }));
-      console.log(`[Admin Pixabay] ✅ Proceso terminado. Candidatos válidos guardados:`, finalUrls.length);
+      // Filtrado Básico: Descartamos apaisadas anchas agresivas. Buscamos ratio equilibrado.
+      const validPhotos = data.photos.filter(p => p.width / p.height < 1.6 && p.width / p.height > 0.5);
+      console.log(`[Admin Pexels] 🧹 Ratio depurado. Quedan ${validPhotos.length} utilitarias de ${data.photos.length}`);
+
+      // Usamos el fallback a la lista sucia original si el ratio-filter ahogó todo
+      const fallback = validPhotos.length >= 5 ? validPhotos : data.photos;
+      const urls = fallback.slice(0, 5).map(hit => hit.src.medium || hit.src.original);
+
+      setCandidates(prev => ({ ...prev, [item.id]: urls }));
+      setSelectedCandidate(prev => ({ ...prev, [item.id]: urls[0] }));
+
     } catch (e) {
-      console.error("[Admin Pixabay] 💥 Catch Error:", e.message || e);
-      alert("Fallo al buscar en Pixabay. Revisa la consola.");
+      console.error("[Admin Buscar] Error crítico:", e);
+      alert("Fallo al buscar en Pexels. Revisa la consola.");
     } finally {
       setBusyItems(prev => ({ ...prev, [item.id]: false }));
     }
@@ -390,9 +420,9 @@ export default function Admin() {
                  
                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap:'wrap' }}>
                     <button disabled={busyItems[i.id]} onClick={() => handleSearchImages(i)} style={{ padding: '8px 12px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px', fontWeight:'bold' }}>
-                      🔍 Buscar 5 {pixabayPages[i.id] > 1 ? `(Pág ${pixabayPages[i.id] + 1})` : ''}
+                      🔍 Buscar 5 {searchPages[i.id] > 1 ? `(Pág ${searchPages[i.id] + 1})` : ''}
                     </button>
-                    {pixabayPages[i.id] > 1 && (
+                    {searchPages[i.id] > 1 && (
                         <button disabled={busyItems[i.id]} onClick={() => handleSearchImages(i, true)} style={{ padding: '8px 12px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px', fontWeight:'bold' }}>
                           🔄 Reset
                         </button>
