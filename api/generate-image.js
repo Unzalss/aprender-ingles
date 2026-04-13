@@ -20,9 +20,34 @@ export default async function handler(req, res) {
 
     let promptText = "";
     if (type === 'word' || type === 'object') {
-      promptText = `simple children's illustration of ${label}, white background, soft colors, centered object, no text`;
+      promptText = `A simple, cute children's illustration of a single ${label}. 
+Centered composition. 
+White background. 
+Soft pastel colors. 
+Rounded shapes. 
+Minimal details. 
+No text. 
+No letters. 
+No watermark. 
+Not realistic. 
+Cartoon style. 
+Clean vector-like drawing. 
+Consistent children's book style.`;
     } else {
-      promptText = `simple children's illustration showing a child-friendly character performing ${label}, white background, soft colors, centered composition, no text`;
+      promptText = `A simple, cute children's illustration of a child clearly performing the action '${label}'. 
+Centered composition. 
+White background. 
+Soft pastel colors. 
+Rounded shapes. 
+Minimal details. 
+Very clear action. 
+No text. 
+No letters. 
+No watermark. 
+Not realistic. 
+Cartoon style. 
+Clean vector-like drawing. 
+Consistent children's book style.`;
     }
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
@@ -32,7 +57,7 @@ export default async function handler(req, res) {
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "dall-e-3",
+        model: "gpt-image-1",
         prompt: promptText,
         n: 1,
         size: "1024x1024"

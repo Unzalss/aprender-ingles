@@ -276,8 +276,23 @@ export default function Admin() {
                    </div>
                    <span style={{fontSize:'12px', background:'#eee', padding:'2px 8px', borderRadius:'10px', color:'#666'}}>{i.type}</span>
                  </div>
+
+                 {/* POLITICA DE GENERACION / BUSQUEDA */}
+                 <div style={{ marginTop: '15px', marginBottom: '5px', fontSize: '12px', padding: '10px', borderRadius: '6px', backgroundColor: '#fcfcfc', border: '1px solid #eee' }}>
+                   {i.type === 'object' || i.type === 'word' ? (
+                     <>
+                       <div style={{marginBottom: '4px', color: '#388E3C'}}><b>🟢 PRIORIDAD: BUSCAR</b></div>
+                       <div style={{color: '#666'}}>Usa primero Buscar 5. Solo generar si no hay opción válida.</div>
+                     </>
+                   ) : (
+                     <>
+                       <div style={{marginBottom: '4px', color: '#F57C00'}}><b>🟡 PRIORIDAD: GENERAR</b></div>
+                       <div style={{color: '#666'}}>Probablemente necesitarás Generar 1 (acciones son difíciles de encontrar).</div>
+                     </>
+                   )}
+                 </div>
                  
-                 <div style={{ display: 'flex', gap: '8px', marginTop: '15px', flexWrap:'wrap' }}>
+                 <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap:'wrap' }}>
                     <button disabled={busyItems[i.id]} onClick={() => handleSearchImages(i)} style={{ padding: '8px 12px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px', fontWeight:'bold' }}>
                       🔍 Buscar 5
                     </button>
