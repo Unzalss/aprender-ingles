@@ -47,17 +47,30 @@ export async function getSessionItems(supabaseClient) {
      return dA - dB;
   });
 
-  const selectedLearnings = priorityLearnings.slice(0, slotsRemaining);
+  // Intentamos rellenar los huecos iniciales con learnings únicos priorizados
+  const initialRemaining = 30 - sessionQueue.length;
+  const selectedLearnings = priorityLearnings.slice(0, initialRemaining);
   selectedLearnings.forEach(L => {
     sessionQueue.push({ ...L, isExposition: false, sessionUuid: crypto.randomUUID() });
   });
 
-  // Si no hay suficientes learnings o news para llegar a 30 (ej. fin de bloque), extraemos masters al azar.
-  if (sessionQueue.length < 30) {
-      let masterFills = mastereds.sort(() => 0.5 - Math.random()).slice(0, 30 - sessionQueue.length);
-      masterFills.forEach(M => {
-          sessionQueue.push({ ...M, isExposition: false, isReview: true, sessionUuid: crypto.randomUUID() });
-      });
+  // 4B. PADDING FORZADO RIGUROSO PARA GARANTIZAR 30 ITEMS EXACTOS SI LA DB ESTÁ 'SECA'
+  // Si no había learnings suficientes, repetimos internamente los pocos que haya, o duplicamos news.
+  const paddingPool = [...priorityLearnings, ...news];
+  // Failsafe por si la base está formada por 100% mastereds (imposible pero por si acaso)
+  if (paddingPool.length === 0) {
+      paddingPool.push(...data);
+  }
+
+  while (sessionQueue.length < 30) {
+      const randomItem = paddingPool[Math.floor(Math.random() * paddingPool.length)];
+      // Las repeticiones forzadas operan como "repaso/evaluación"
+      sessionQueue.push({ ...randomItem, isExposition: false, isReview: true, sessionUuid: crypto.randomUUID() });
+  }
+
+  // Prevenir desbordes si la base de cálculo de news estirara de más accidentalmente
+  if (sessionQueue.length > 30) {
+      sessionQueue.length = 30;
   }
 
   // 5. Mezcla y Separación Espaciada (anti-colapso consecutivo)
