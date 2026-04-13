@@ -11,6 +11,7 @@ export default function Admin() {
   const [candidates, setCandidates] = useState({}); // { itemId: [url1, url2...] }
   const [selectedCandidate, setSelectedCandidate] = useState({}); // { itemId: url }
   const [busyItems, setBusyItems] = useState({}); // { itemId: boolean }
+  const [imageErrors, setImageErrors] = useState({}); // { itemId: boolean }
 
   const fetchItems = async () => {
     setLoading(true);
@@ -219,6 +220,20 @@ export default function Admin() {
     return false;
   };
 
+  const sortedItems = [...items].sort((a, b) => {
+    const aMissing = isBadImageUrl(a.image_url);
+    const bMissing = isBadImageUrl(b.image_url);
+    const aError = imageErrors[a.id];
+    const bError = imageErrors[b.id];
+    
+    // 0: sin imagen, 1: error, 2: ok
+    const aScore = aMissing ? 0 : (aError ? 1 : 2);
+    const bScore = bMissing ? 0 : (bError ? 1 : 2);
+    
+    if (aScore !== bScore) return aScore - bScore;
+    return a.id.localeCompare(b.id);
+  });
+
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems:'center', marginBottom: '20px' }}>
@@ -227,22 +242,38 @@ export default function Admin() {
       </div>
 
       <div style={{ display: 'grid', gap: '20px' }}>
-        {items.map(i => (
+        {sortedItems.map(i => {
+          const isMissing = isBadImageUrl(i.image_url);
+          const isError = imageErrors[i.id];
+          const statusIcon = isMissing ? '🟡' : (isError ? '🔴' : '🟢');
+
+          return (
           <div key={i.id} style={{ background: 'white', padding: '15px', borderRadius: '12px', border: '1px solid #eee', boxShadow:'0 2px 8px rgba(0,0,0,0.05)' }}>
             
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '20px' }}>
               {/* MINIATURA ACTUAL */}
               <div style={{ width: '120px', height: '120px', background: '#f5f5f5', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', border:'1px solid #ddd' }}>
-                 {isBadImageUrl(i.image_url) ? 
-                    <span style={{fontSize:'12px', color:'#999'}}>SIN IMAGEN</span> : 
-                    <img src={i.image_url} alt={i.label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                 }
+                 {isMissing ? (
+                    <span style={{fontSize:'12px', color:'#999', fontWeight:'bold'}}>SIN IMAGEN</span>
+                 ) : isError ? (
+                    <span style={{fontSize:'14px', color:'#f44336', fontWeight:'bold'}}>ERROR</span>
+                 ) : (
+                    <img 
+                      src={i.image_url} 
+                      alt={i.label} 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                      onError={() => setImageErrors(prev => ({...prev, [i.id]: true}))}
+                    />
+                 )}
               </div>
 
               {/* INFO Y BOTONES */}
               <div style={{ flex: 1 }}>
                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
-                   <b style={{fontSize:'20px', textTransform:'capitalize'}}>{i.label}</b>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                     <span title={isMissing ? "Sin imagen" : isError ? "Error de carga" : "Carga correcta"}>{statusIcon}</span>
+                     <b style={{fontSize:'20px', textTransform:'capitalize'}}>{i.label}</b>
+                   </div>
                    <span style={{fontSize:'12px', background:'#eee', padding:'2px 8px', borderRadius:'10px', color:'#666'}}>{i.type}</span>
                  </div>
                  
@@ -298,7 +329,8 @@ export default function Admin() {
 
             {busyItems[i.id] && <div style={{fontSize:'12px', color:'#2196F3', marginTop:'10px', textAlign:'center', fontStyle:'italic'}}>Procesando... 🚀</div>}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
