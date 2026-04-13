@@ -55,9 +55,18 @@ export default function Admin() {
         per_page: 15, // Pedimos un poco extra para poder filtrar localmente
       });
 
+      console.log(`[Admin Pixabay] 🔍 Buscando en Pixabay con query: "${q}"...`);
       const response = await fetch(`https://pixabay.com/api/?${params.toString()}`);
-      if (!response.ok) throw new Error("Error en red Pixabay");
+      console.log(`[Admin Pixabay] 📡 Status respuesta: ${response.status}`);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("[Admin Pixabay] ❌ Texto error:", errorText);
+        throw new Error(`Error en red Pixabay: ${response.status}`);
+      }
+
       const data = await response.json();
+      console.log(`[Admin Pixabay] 📊 Resultados brutos obtenidos:`, data.hits?.length || 0);
 
       let results = data.hits || [];
       
@@ -80,8 +89,9 @@ export default function Admin() {
       }
 
       setCandidates(prev => ({ ...prev, [item.id]: finalUrls }));
+      console.log(`[Admin Pixabay] ✅ Proceso terminado. Candidatos válidos guardados:`, finalUrls.length);
     } catch (e) {
-      console.error("Error buscando en Pixabay:", e);
+      console.error("[Admin Pixabay] 💥 Catch Error:", e.message || e);
       alert("Fallo al buscar en Pixabay. Revisa la consola.");
     } finally {
       setBusyItems(prev => ({ ...prev, [item.id]: false }));
@@ -91,6 +101,7 @@ export default function Admin() {
   const handleGenerateImage = async (item) => {
     setBusyItems(prev => ({ ...prev, [item.id]: true }));
     try {
+      console.log(`[Admin Generar] ✨ Petición a Backend /api/generate-image -> "${item.label}"`);
       // Llamada al backend en lugar de a OpenAI directamente
       const response = await fetch("/api/generate-image", {
         method: "POST",
@@ -103,12 +114,23 @@ export default function Admin() {
         })
       });
 
+      console.log(`[Admin Generar] 📡 HTTP Status del Backend: ${response.status}`);
+
+      // FIX CATCH: Si se ejecuta en Vite local (npm run dev) sin proxy, Vite de forma predeterminada lanza el index.html
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("text/html")) {
+         console.error("[Admin Generar] 💥 ERROR: El servidor local de Vite devolvió código HTML en vez de la API. Las rutas /api requieren funcionar en Vercel o configurar un proxy local.");
+         throw new Error("Dev Local Issue: /api/ devolvió HTML. Abre la consola.");
+      }
+
       if (!response.ok) {
          const errData = await response.json();
+         console.error("[Admin Generar] ❌ Backend retornó error JSON:", errData);
          throw new Error(errData.error || "Error del backend al generar");
       }
 
       const data = await response.json();
+      console.log(`[Admin Generar] ✅ ÉXITO. URL obtenida:`, data.url);
       const generatedUrl = data.url;
 
       // Se añade a la lista de candidatas (acumulativo por si piden generar varias veces)
@@ -118,8 +140,8 @@ export default function Admin() {
       }));
 
     } catch (e) {
-      console.error("Error al generar imagen:", e);
-      alert("Hubo un error al generar la imagen de IA: " + e.message);
+      console.error("[Admin Generar] 💥 Catch Global Error:", e);
+      alert("Hubo un error de IA visualizado en consola: " + e.message);
     } finally {
       setBusyItems(prev => ({ ...prev, [item.id]: false }));
     }
