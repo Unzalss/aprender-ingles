@@ -1,5 +1,3 @@
-import { supabase } from '../supabase';
-
 /**
  * MOTOR DE APRENDIZAJE: REPETICIÓN ESPACIADA (Fase 2)
  * Se ejecuta al iniciar una sesión para calcular el array de 30 elementos óptimos.
