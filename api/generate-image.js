@@ -59,7 +59,7 @@ Consistent children's book style.`;
         "Authorization": `Bearer ${apiKey}`
       },
       body: JSON.stringify({
-        model: "gpt-image-1",
+        model: "dall-e-3",
         prompt: promptText,
         n: 1,
         size: "1024x1024"
@@ -70,11 +70,13 @@ Consistent children's book style.`;
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("[API Backend] 💥 Error JSON de OpenAI:", JSON.stringify(errorData, null, 2));
+      console.error("[API Backend] 💥 Error JSON de OpenAI RAW:", JSON.stringify(errorData, null, 2));
       return res.status(response.status).json({ error: errorData.error?.message || 'Error en la respuesta de OpenAI' });
     }
 
     const data = await response.json();
+    console.log("[API Backend] 🔬 Response JSON RAW de OpenAI:", JSON.stringify(data, null, 2));
+
     const generatedUrl = data.data && data.data[0] ? data.data[0].url : null;
 
     if (!generatedUrl) {

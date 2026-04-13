@@ -192,12 +192,13 @@ export default function Admin() {
         if (dbError) throw dbError;
 
         console.log(`[Admin Guardar] 🎉 Ítem actualizado en DB correctamente.`);
-        // Actualizar UI local
+        // Actualizar UI local limpiando cualquier error cacheado visualmente
         setItems(prev => prev.map(i => i.id === itemId ? { ...i, image_url: publicUrl } : i));
         
-        // Limpiar selección
+        // Limpiar selección de vista
         setCandidates(prev => { const n = { ...prev }; delete n[itemId]; return n; });
         setSelectedCandidate(prev => { const n = { ...prev }; delete n[itemId]; return n; });
+        setImageErrors(prev => { const n = { ...prev }; delete n[itemId]; return n; });
 
      } catch (e) {
         console.error("[Admin Guardar] 💥 Error al guardar imagen:", e);
