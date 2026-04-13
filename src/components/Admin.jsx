@@ -12,6 +12,7 @@ export default function Admin() {
   const [selectedCandidate, setSelectedCandidate] = useState({}); // { itemId: url }
   const [busyItems, setBusyItems] = useState({}); // { itemId: boolean }
   const [imageErrors, setImageErrors] = useState({}); // { itemId: boolean }
+  const [pixabayPages, setPixabayPages] = useState({}); // { itemId: pagina_actual }
 
   const fetchItems = async () => {
     setLoading(true);
@@ -30,7 +31,7 @@ export default function Admin() {
   useEffect(() => { fetchItems(); }, []);
 
   // MOCKS Y LÓGICA DE IMÁGENES (Fase 3: Búsqueda Pixabay Activa)
-  const handleSearchImages = async (item) => {
+  const handleSearchImages = async (item, forceReset = false) => {
     setBusyItems(prev => ({ ...prev, [item.id]: true }));
     try {
       const apiKey = import.meta.env.VITE_PIXABAY_API_KEY;
@@ -40,6 +41,9 @@ export default function Admin() {
         alert("Falta configurar la API Key real de Pixabay. Revisa la consola.");
         return;
       }
+
+      let currentPage = forceReset ? 1 : (pixabayPages[item.id] || 0) + 1;
+      setPixabayPages(prev => ({ ...prev, [item.id]: currentPage }));
 
       // Diferenciamos estrategia: objetos directos vs verbos en acción
       let q = "";
@@ -55,6 +59,7 @@ export default function Admin() {
         image_type: 'illustration',
         safesearch: 'true',
         per_page: 15, // Pedimos un poco extra para poder filtrar localmente
+        page: currentPage.toString(),
       });
 
       console.log(`[Admin Pixabay] 🔍 Buscando en Pixabay con query: "${q}"...`);
@@ -320,8 +325,13 @@ export default function Admin() {
                  
                  <div style={{ display: 'flex', gap: '8px', marginTop: '10px', flexWrap:'wrap' }}>
                     <button disabled={busyItems[i.id]} onClick={() => handleSearchImages(i)} style={{ padding: '8px 12px', background: '#2196F3', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px', fontWeight:'bold' }}>
-                      🔍 Buscar 5
+                      🔍 Buscar 5 {pixabayPages[i.id] > 1 ? `(Pág ${pixabayPages[i.id] + 1})` : ''}
                     </button>
+                    {pixabayPages[i.id] > 1 && (
+                        <button disabled={busyItems[i.id]} onClick={() => handleSearchImages(i, true)} style={{ padding: '8px 12px', background: '#e0e0e0', color: '#333', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px', fontWeight:'bold' }}>
+                          🔄 Reset
+                        </button>
+                    )}
                     <button disabled={busyItems[i.id]} onClick={() => handleGenerateImage(i)} style={{ padding: '8px 12px', background: '#9C27B0', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer', fontSize:'13px', fontWeight:'bold' }}>
                       ✨ Generar 1
                     </button>

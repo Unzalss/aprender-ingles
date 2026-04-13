@@ -36,20 +36,26 @@ Cartoon style.
 Clean vector-like drawing. 
 Consistent children's book style.`;
     } else {
-      promptText = `A simple, cute children's illustration of a child clearly performing the action '${label}'. 
-Centered composition. 
+      const verbMap = {
+        'sit': 'sitting down',
+        'eat': 'eating food',
+        'look': 'looking at something',
+        'walk': 'walking',
+        'run': 'running',
+        'jump': 'jumping',
+        'play': 'playing',
+        'sleep': 'sleeping'
+      };
+      const mappedAction = verbMap[label.toLowerCase()] || `${label}`;
+
+      promptText = `A simple, cute children's illustration of a child ${mappedAction} clearly. 
 White background. 
-Soft pastel colors. 
-Rounded shapes. 
-Minimal details. 
-Very clear action. 
+Centered. 
+Soft colors. 
 No text. 
-No letters. 
-No watermark. 
-Not realistic. 
 Cartoon style. 
-Clean vector-like drawing. 
-Consistent children's book style.`;
+Very clear action for kids. 
+No realism.`;
     }
 
     const response = await fetch("https://api.openai.com/v1/images/generations", {
