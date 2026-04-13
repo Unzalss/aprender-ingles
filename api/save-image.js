@@ -21,11 +21,11 @@ export default async function handler(req, res) {
     const arrayBuffer = await imgResponse.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    console.log(`[Backend SaveImage] 📤 Subiendo al Storage de Supabase (Bucket 'images')...`);
-    // Usar la librería supabase-js en Node (Vercel Serverless) esquiva las directivas restrictivas CORS del navegador.
-    const supabaseUrl = process.env.VITE_SUPABASE_URL;
-    const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    console.log("🔑 Usando service role key en backend");
+    const supabase = createClient(
+      process.env.VITE_SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
 
     const fileName = `${Date.now()}.png`;
     const filePath = `${itemId}/${fileName}`;
@@ -38,11 +38,10 @@ export default async function handler(req, res) {
       });
 
     if (uploadError) {
-      console.error(`[Backend SaveImage] ❌ Error subiendo a Supabase Storage:`, uploadError);
-      throw new Error(`Error subiendo a Supabase: ${uploadError.message}`);
+      console.error(`[Backend SaveImage] ❌ Error subiendo a Supabase Storage:`, JSON.stringify(uploadError, null, 2));
+      throw new Error(`Error RLS/Upload de Supabase: ${uploadError.message}`);
     }
 
-    console.log(`[Backend SaveImage] ✅ Subida correcta. Obteniendo link público...`);
     const { data: urlData } = supabase.storage
       .from('images')
       .getPublicUrl(filePath);
