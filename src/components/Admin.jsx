@@ -34,8 +34,10 @@ export default function Admin() {
     setBusyItems(prev => ({ ...prev, [item.id]: true }));
     try {
       const apiKey = import.meta.env.VITE_PIXABAY_API_KEY;
-      if (!apiKey) {
-        alert("Falta VITE_PIXABAY_API_KEY en .env.local.");
+      
+      if (!apiKey || apiKey.includes("tu_pixabay_key") || apiKey.trim() === "") {
+        console.error("❌ Falta VITE_PIXABAY_API_KEY. Debes configurar la clave real en las Environment Variables de Vercel (y regenerar el despliegue) o en tu .env.local local.");
+        alert("Falta configurar la API Key real de Pixabay. Revisa la consola.");
         return;
       }
 
@@ -157,31 +159,31 @@ export default function Admin() {
      
      setBusyItems(prev => ({ ...prev, [itemId]: true }));
      try {
-        // 1. Descargar imagen (fetch)
-        // Nota: Las imágenes mock de picsum permiten CORS normalmente.
-        const response = await fetch(url);
-        const blob = await response.blob();
+        console.log(`[Admin Guardar] 🚀 Pidiendo al backend que salve la URL: ${url}`);
+        // 1 & 2 & 3. Descarga remota, Subida a Supabase y Recepción de URL (vía Backend Proxy para evitar CORS)
+        const response = await fetch('/api/save-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, itemId })
+        });
         
-        // 2. Subir a Supabase Storage
-        // Usamos una ruta organizada: {itemId}/{timestamp}.png
-        const fileName = `${Date.now()}.png`;
-        const filePath = `${itemId}/${fileName}`;
-        
-        const { error: uploadError } = await supabase.storage
-          .from('images')
-          .upload(filePath, blob, {
-            contentType: 'image/png',
-            upsert: true
-          });
+        // Control Vite fallback
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.includes("text/html")) {
+           throw new Error("Dev Local Issue: /api/save-image devolvió HTML. Usa Vercel o proxy de Vite.");
+        }
 
-        if (uploadError) throw uploadError;
+        const data = await response.json();
+        if (!response.ok) {
+           console.error("[Admin Guardar] ❌ Backend retornó error:", data);
+           throw new Error(data.error || "Error al persistir imagen en el backend");
+        }
 
-        // 3. Obtener la URL pública
-        const { data: { publicUrl } } = supabase.storage
-          .from('images')
-          .getPublicUrl(filePath);
+        const publicUrl = data.publicUrl;
+        console.log(`[Admin Guardar] ✅ Nueva URL pública obtenida del Bucket: ${publicUrl}`);
 
-        // 4. Actualizar items.image_url en la BD
+        // 4. Actualizar items.image_url en la BD (Mantenido en el cliente)
+        console.log(`[Admin Guardar] 💾 Actualizando DB Frontend...`);
         const { error: dbError } = await supabase
           .from('items')
           .update({ image_url: publicUrl })
@@ -189,6 +191,7 @@ export default function Admin() {
 
         if (dbError) throw dbError;
 
+        console.log(`[Admin Guardar] 🎉 Ítem actualizado en DB correctamente.`);
         // Actualizar UI local
         setItems(prev => prev.map(i => i.id === itemId ? { ...i, image_url: publicUrl } : i));
         
@@ -197,8 +200,8 @@ export default function Admin() {
         setSelectedCandidate(prev => { const n = { ...prev }; delete n[itemId]; return n; });
 
      } catch (e) {
-        console.error("Error al guardar imagen:", e);
-        alert("Fallo al persistir la imagen en Supabase. Revisa CORS o permisos del Bucket.");
+        console.error("[Admin Guardar] 💥 Error al guardar imagen:", e);
+        alert("Fallo al persistir la imagen en Supabase. Error: " + e.message);
      } finally {
         setBusyItems(prev => ({ ...prev, [itemId]: false }));
      }
