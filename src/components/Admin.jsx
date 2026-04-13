@@ -60,7 +60,12 @@ export default function Admin() {
       for (let item of catalog) {
          const cleanLabel = item.label.toLowerCase();
          if (!existingLabels.has(cleanLabel) && !seen.has(cleanLabel)) {
-            rawPayload.push(item);
+            // Añadir ID generado explicitamente porque la base heredada no tiene auto-incremento nativo
+            const payloadItem = {
+              ...item,
+              id: crypto.randomUUID()
+            };
+            rawPayload.push(payloadItem);
             seen.add(cleanLabel);
          }
       }
@@ -71,6 +76,8 @@ export default function Admin() {
          return;
       }
 
+      console.log(`[Seed] Inyectando ${rawPayload.length} filas. Payload crudo:`, rawPayload);
+      
       const { error: insertError } = await supabase.from('items').insert(rawPayload);
       if (insertError) throw insertError;
 
