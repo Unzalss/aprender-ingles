@@ -169,14 +169,14 @@ export default function Admin() {
     }
 
     if (item.type === 'object') {
-      return `${label} isolated object white background simple`;
+      return `single ${label}, isolated, centered, no background clutter, plain background, studio photo, minimal`;
     }
 
     if (item.type === 'command') {
-      return `person ${label} simple action indoors clear`;
+      return `single person ${label}, centered, plain background, no objects, clear action, minimal`;
     }
 
-    return `${label} simple clear image`;
+    return `single ${label}, centered, plain background, minimal, no extra objects`;
   };
 
   // MOCKS Y LÓGICA DE IMÁGENES (Fase 4: Búsqueda Semántica Pexels Activa)
@@ -479,6 +479,26 @@ export default function Admin() {
     if (aScore !== bScore) return aScore - bScore;
     return a.id.localeCompare(b.id);
   });
+
+  // TAREA DE AUTO-BÚSQUEDA SILENCIOSA ESPACIADA
+  const [autoSearchDone, setAutoSearchDone] = useState(false);
+
+  useEffect(() => {
+     if (items.length > 0 && !autoSearchDone) {
+        setAutoSearchDone(true);
+        const missing = items.filter(i => isBadImageUrl(i.image_url));
+        
+        // Disparamos con retraso en cascada para no colapsar la cuota API (1000ms / req)
+        missing.forEach((item, index) => {
+            setTimeout(() => {
+                // Solo si el usuario no ha pinchado ya buscar manualmente
+                if (!candidates[item.id]) { 
+                   handleSearchImages(item);
+                }
+            }, index * 1000); 
+        });
+     }
+  }, [items, autoSearchDone]);
 
   return (
     <div style={{ padding: '20px', maxWidth: '1000px', margin: '0 auto', fontFamily: 'sans-serif' }}>

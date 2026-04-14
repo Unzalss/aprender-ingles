@@ -1,163 +1,319 @@
-# FOTO FIJA: APP APRENDER INGLÉS (NIÑOS)
-*Documento maestro de estado, arquitectura y curación visual.*
+FOTO FIJA: APP APRENDER INGLÉS (NIÑOS)
 
----
+Documento maestro de estado, arquitectura y decisiones cerradas.
 
-## 1. OBJETIVO DEL PROYECTO
-- **Qué es la app**: Una aplicación interactiva diseñada para la enseñanza y asimilación de vocabulario básico en inglés.
-- **Para quién es**: Dirigida inicialmente a dos usuarios infantiles concretos (Izan y Valeria).
-- **Qué resuelve**: Facilita el aprendizaje mediante un flujo de retención visual y repetición, registrando métricas de acierto/fallo y la evolución del vocabulario de 'new' a 'mastered'.
-- **Alcance actual de la V1**: Aplicación funcional Web/Móvil con Dashboard personal, ciclo de Sesión (preguntas) y un Panel Admin para la curación de contenido y medios.
-- **Partes privadas vs. vendibles**:
-  - *Privadas/Internas*: Los perfiles harcodeados actuales (Izan/Valeria), el panel Admin y el bucket/base de datos ligados a la instancia en desarrollo.
-  - *Vendibles a futuro*: El motor de aprendizaje frontal, la lógica de métricas en sesión y la arquitectura desacoplada en Supabase/Vercel preparada para un escalado a multitenant.
+1. OBJETIVO DEL PROYECTO
+Qué es la app: Aplicación interactiva para enseñar inglés a niños pequeños mediante imágenes/GIFs, audio y repetición controlada.
+Para quién es: Inicialmente para dos niños concretos: Izan y Valeria.
+Qué resuelve: Enseñanza de vocabulario y acciones cotidianas con un sistema de exposición + evaluación, registrando progreso real por niño.
+Alcance actual de la V1:
+selección de niño
+dashboard
+sesión de aprendizaje
+panel Admin de curación de contenidos
+subida manual de imágenes/GIFs
+motor de sesiones ya operativo
+Partes privadas vs vendibles:
+Privadas: perfiles fijos actuales, panel Admin interno, bucket/BD del entorno actual.
+Vendibles a futuro: motor de sesiones, lógica de progreso, arquitectura React + Vercel + Supabase.
+2. STACK Y ARQUITECTURA ACTUAL
+Frontend: React con Vite
+Hosting: Vercel
+Base de datos: Supabase Postgres
+Storage: Supabase Storage
+Backend/API: funciones serverless en Vercel
+IA imágenes: endpoint backend con OpenAI / DALL·E
+Búsqueda externa de imágenes: se ha probado Pixabay y después Pexels
+Firebase: eliminado, no volver a proponerlo
+Variables de entorno actuales / usadas
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+OPENAI_API_KEY
+SUPABASE_SERVICE_ROLE_KEY
+se han usado/clasificado también claves de búsqueda externas según proveedor
+3. ESTRUCTURA FUNCIONAL ACTUAL
+Selección de niño
+Entrada inicial con perfiles Izan y Valeria
+Sin auth compleja
+Selección guardada en estado React
+Dashboard
+Muestra estado de aprendizaje por niño
+Clasificación visual por progreso
+Session
+Ya reestructurada con metodología cerrada
+Ya no depende del flujo antiguo simple
+Usa motor de sesión nuevo
+Admin
 
----
+El Admin sigue siendo el centro absoluto de trabajo.
 
-## 2. STACK Y ARQUITECTURA ACTUAL
-- **Frontend**: React.js (construido con Vite).
-- **Hosting**: Vercel.
-- **Base de Datos**: Supabase (PostgreSQL).
-- **Storage**: Supabase Storage (Bucket público).
-- **Backend/API**: Funciones Serverless de Vercel (escritas en Node.js común).
-- **Variables de entorno usadas**:
-  - `VITE_SUPABASE_URL` (Frontend)
-  - `VITE_SUPABASE_ANON_KEY` (Frontend)
-  - `VITE_PIXABAY_API_KEY` (Frontend - Búsqueda)
-  - `OPENAI_API_KEY` (Backend protegido - Generación)
-- **Dependencias exactas por servicio**:
-  - *Supabase*: Almacena el esquema SQL (`items`, `user_progress`), expone la DB y aloja físicamente las imágenes en el bucket `images`.
-  - *Vercel*: Sirve el paquete empaquetado de React (Frontend) y ejecuta el endpoint invisible `/api/generate-image`.
-  - *OpenAI*: Subministra el modelo `dall-e-3` llamado en el backend para crear imágenes bajo demanda.
-  - *Pixabay*: API HTTP consumida por el frontend para alimentar el panel de candidatos con dibujos de stock.
-- **⚠️ CONFIRMACIÓN**: El SDK y cualquier dependencia o fichero relacionado con Google Firebase **han sido eliminados del proyecto**.
+Actualmente permite:
 
----
+Buscar 5
+Generar 1
+Guardar seleccionada
+Eliminar
+Subir archivo manual
+Añadir palabra manualmente
+Carga inicial de catálogo ya hecha por SQL
+Previsualización de imagen/GIF
+Gestión de palabras sin imagen
+Subida manual
+Ya se pueden subir manualmente:
+.png
+.jpg
+.jpeg
+.webp
+.gif
+Se suben a Supabase Storage
+Se actualiza items.image_url
+El preview refresca en el momento
+4. BASE DE DATOS ACTUAL
+Tablas
+items
+user_progress
+items
 
-## 3. ESTRUCTURA FUNCIONAL ACTUAL
-- **Flujo de selección de niño**: Renderizado condicional inicial en `App.jsx` que permite entrar haciendo clic en "Izan" o "Valeria" (sin contraseñas o Firebase Auth, guardando la selección en estado de React).
-- **Dashboard / panel (`Dashboard.jsx`)**: Lee `user_progress` para el usuario activo y muestra de forma visual las palabras en estado "new", "learning" y "mastered".
-- **Session (`Session.jsx`)**: El motor core. Cruza datos de `items` y `user_progress`. Evalúa aciertos y fallos y hace 'upsert' en la DB cambiando los estados.
-- **Admin (`Admin.jsx`)**: Panel de gestión para ver, modificar imágenes y resolver items rotos.
-  - *Qué botones existen hoy*: Buscar 5, Generar 1, Guardar seleccionada, Eliminar (imagen).
-  - *Buscar 5*: Llama a Pixabay variando el término según sea "objeto" o "comando/verbo" ("cartoon cute" vs "kids action cartoon"), filtra basura visual y pinta 5 miniaturas.
-  - *Generar 1*: Llama al endpoint de Vercel `/api/generate-image` que internamente invoca DALL-E 3 produciendo una URL nueva y la coloca en la galería de opciones efímeras.
-  - *Guardar seleccionada*: Hace Fetch al Blob de la imagen elegida, la inyecta como `image/png` genérica en Supabase Storage, obtiene el Public Link de Supabase y hace Update del campo `image_url` del ítem específico.
-  - *Eliminar*: Pone `image_url = null` en la DB e intenta borrar el archivo físico antiguo del Storage para ahorrar espacio.
+Campos base y ampliados:
 
----
+id
+label
+type
+image_url
+category
+translation_es
+ambiguity_level
+status
+correct_count
+last_seen_at
+last_correct_at
+correct_days
+Tipos válidos
+object
+word
+command
+user_progress
+sigue siendo la tabla de seguimiento por usuario/niño
+conserva el rol de guardar progreso individual
+Storage
+bucket images
+se usa para imágenes y también GIFs
+backend usa service role para evitar bloqueos RLS al guardar
+5. ESTADO REAL ACTUAL DEL PROYECTO
+🟢 FUNCIONA
+App desplegada y accesible en Vercel
+Supabase conectado
+Storage funcionando
+Guardado de imágenes funcionando
+Subida manual de imágenes y GIFs funcionando
+Creación manual de palabras funcionando
+Catálogo grande cargado en BD
+Motor de sesión funcionando
+Endpoint de test funcionando
+Sesión real funcionando
+Metodología nueva 30 + 20 funcionando
+No aparecen palabras sin imagen en sesión
+UI de sesión ya operativa
+🟡 FUNCIONA PARCIALMENTE
+Buscar imágenes devuelve resultados, pero la calidad visual no es fiable
+Generar por IA funciona técnicamente, pero no está cerrado el estilo definitivo
+Los verbos siguen siendo el área más difícil visualmente
+🟠 PENDIENTE
+Cerrar de forma definitiva la estrategia visual
+Cerrar prompt maestro de generación IA
+Definir cuándo usar buscar y cuándo generar
+Audio español de apoyo
+Limpieza de imágenes malas o antiguas
+Pulido UX final
+🔴 NO FUNCIONA / NO ESTÁ RESUELTO
+La coherencia estética global todavía NO está cerrada
+No existe todavía un criterio visual único y blindado para todo el catálogo
+La búsqueda externa no garantiza material válido para niños pequeños en verbos complejos
+6. DECISIONES YA TOMADAS Y CERRADAS
+Stack
+Mantener:
+React + Vite
+Vercel
+Supabase
+No cambiar stack
+Filosofía de trabajo
+Desarrollo por bloques pequeños
+Todo a través de Antigravity
+Sin reescrituras grandes
+Sin improvisar
+Admin
+El Admin sigue siendo el centro total de curación
+No quitar sus funciones existentes
+Mantener:
+Buscar 5
+Generar 1
+Guardar seleccionada
+Eliminar
+Subir archivo manual
+Añadir palabra manual
+Imágenes
+Las búsquedas automáticas han demostrado limitaciones
+El usuario quiere seguir manteniendo el sistema actual, pero con capacidad de subir manualmente lo que haga falta
+Las palabras problemáticas se resolverán manualmente cuando sea necesario
+Los GIFs están aceptados como solución válida para verbos/acciones si ayudan pedagógicamente
+Calidad visual
+La calidad visual es ahora el problema principal del proyecto
+El sistema funcional ya existe
+Lo que queda ya no es “hacer la app”, sino dejarla seria y usable de verdad
+7. CATÁLOGO Y CONTENIDO
+Catálogo
+Ya se ha cargado un catálogo amplio de palabras (~300 aprox) por SQL
+Hay objetos, animales, familia, colores, números, formas, verbos, acciones de casa, posiciones y estados
+Ya existe opción para añadir más palabras manualmente desde Admin
+Regla semántica importante
 
-## 4. BASE DE DATOS ACTUAL
-Las tablas están en esquema relacional dentro de Supabase.
-- **Tablas existentes**: `items` y `user_progress`.
-- **Qué guarda `items`**: El catálogo o diccionario universal.
-  - *Campos*: `id` (PK), `label` (palabra inglesa), `type` (palabra/objeto o verbo), `image_url` (vínculo al bucket de Supabase).
-  - *Tipos válidos*: `'word'`, `'object'`, `'command'`.
-- **Qué guarda `user_progress`**: El estado de aprendizaje individual.
-  - *Campos*: `user_id`, `item_id`, `state`, métricas integradas (aciertos históricos, racha, último repaso).
-  - *Estados válidos*: `'new'`, `'learning'`, `'mastered'`.
-- **Buckets en Supabase**: Un solo bucket público llamado `images`. Las URLs resultantes en base de datos siguen este formato estructurado: `.../public/images/{itemId}/{timestamp}.png`.
+Para ciertas palabras:
 
----
+no valen resultados genéricos
+ejemplos:
+brother ≠ boy
+sister ≠ girl
+mom ≠ woman
+dad ≠ man
+Soporte español
+Ya se ha previsto translation_es
+Se quiere botón futuro de audio español de apoyo cuando haya ambigüedad
+8. METODOLOGÍA CERRADA DE APRENDIZAJE
+Fase 1 — Exposición
+30 items exactos
+Solo items con imagen o GIF
+Los new:
+máximo 3 distintos por sesión
+aparecen 3 veces en exposición
+las repeticiones van separadas
+En exposición:
+imagen/GIF grande
+audio en inglés
+sin examen
+La exposición no cuenta para mastered
+Fase 2 — Evaluación
+20 preguntas exactas
+Solo items con imagen o GIF
+Cada pregunta:
+muestra imagen/GIF
+reproduce audio
+ofrece 3 opciones
+Tras primera evaluación, un new deja de ser new y pasa a learning
+Estados
+new
+learning
+mastered
+Reglas de dominio
+palabras/objetos: 5 aciertos en días distintos
+comandos/verbos: 6 aciertos en días distintos
+Reglas de fallo
+si algo mastered falla:
+vuelve a learning
+reinicia progreso
+9. MOTOR DE SESIONES
+Implementado
+getSessionItems(...)
+evaluateAnswer(...)
+endpoint de prueba /api/test-session creado y funcionando
+Estructura actual
+exposure_queue: 30
+evaluation_queue: 20
+Restricción crítica
+Se excluyen items sin image_url
+Resultado actual
+Motor validado
+JSON correcto
+Sesión usable en web
+10. UI DE SESIÓN
+Estado actual
+Ya existe ruta de sesión funcional
+Muestra exposición y evaluación encadenadas
+Progreso visual por fase
+Feedback visual correcto/incorrecto
+Botones grandes y usables
+Validación actual
+La sesión funciona bien
+Lo confirmado por el usuario:
+no deben aparecer palabras sin imagen
+cada sesión debe ser:
+30 exposición
+20 evaluación
+11. PROBLEMA PRINCIPAL ACTUAL
+Ya NO es técnico
 
-## 5. ESTADO REAL ACTUAL DEL PROYECTO
-### 🟢 FUNCIONA
-- La app está desplegada en Vercel y carga en internet correctamente.
-- Supabase (DB y Storage) ya está conectado y absorbe peticiones sin errores CORS detectados.
-- La selección de niño y el aislamiento del Dashboard por infante funciona correctamente.
-- La sesión ya entra en producción registrando el progreso de aprendizaje real de cada niño.
-- Algunas imágenes antiguas cargan correctamente.
+La app ya funciona.
 
-### 🟡 FUNCIONA PARCIALMENTE
-- **Buscar 5**: Ya devuelve candidatos fiables, pero al ser un motor externo puede ser impredecible para palabras poco literales.
-- **Imágenes Clave**: Mientras que algunas palabras sencillas lo tienen resuelto, "Dog" y "Sit" fallan o están incompletas (requieren uso urgente del admin).
+El problema real ahora es:
 
-### 🟠 PENDIENTE / EN DESARROLLO
-- **Generar 1**: Funciona técnicamente, pero el resultado visual entregado por DALL-E no está garantizo 100% que represente el estilo final homogéneo. 
-- **Verificación IA**: Hay que confirmar/cerrar definitivamente si el modelo fijado y los costes del endpoint `/api/generate-image.js` son exactamente lo que se necesita a largo plazo.
-- **Arte Visual**: La app arrastra contenido viejo (Pixabay viejo + Wikimedia + Mocks locales); es urgente proceder con una limpieza sistemática y unificarlo todo con el estilo final acordado.
+la calidad y coherencia visual del contenido
 
-### 🔴 NO FUNCIONA
-- No existen fallos paralizantes o roturas de código activas; el sistema técnico arranca. Los fallos se concentran exclusivamente en curación de datos (apartado 6).
+Esto incluye:
 
----
+resultados de búsqueda pobres
+verbos difíciles de representar
+mezcla de estilos
+incertidumbre sobre el uso final de IA
+necesidad de curación manual más fuerte
+12. ESTRATEGIA REAL ACTUAL
+Lo que sí existe
+Buscar 5
+Generar 1
+Guardar seleccionada
+Subida manual
+GIFs
+Añadir palabra
+Sesión real funcionando
+Lo que se ha visto
+Buscar automáticamente no garantiza calidad
+Para muchos casos, la solución correcta será:
+elegir manualmente
+o subir manualmente
+o generar IA solo donde tenga sentido
+Conclusión actual
 
-## 6. FALLOS ACTUALES DETECTADOS
-1. **Inconsistencia visual severa**: Coexisten imágenes generadas o traídas en diversas fases iniciales que mezclan fotografía analítica, ilustraciones de stock al azar, arte tipo clip-art y fondos transparentes frente a grises/blancos.
-2. Algunas filas en base de datos de Ítems tienen `image_url` rotas porque todavía apuntan a URLs viejas (loremflickr) o están en null.
-3. El botón "Buscar 5" es útil pero al consumirse de Pixabay no existe garantía ni control matemático sobre la uniformidad del estilo resultante al agregarlos en grupo (a veces devolverá un logo y a veces acuarela).
-4. El backend "Generar 1" carece del ajuste fino final que garantice al 100% una salida de ilustración infantil calcada en cada ítem.
-5. Falta definir de forma contundente la política de visualización: qué regla debe aplicar DALL-E cuando un objeto tangible choca artísticamente con la representación de una acción o verbo.
-6. Falta fijar el presupuesto real y qué generación específica de OpenAI se está cobrando con cada impacto del botón "Generar 1".
-7. Toda la base de datos acarrea la deuda de limpieza de datos basura / imágenes de Test que no pertenecen a la aplicación infantil.
-8. Falta un método claro o manual del usuario para el workflow de reemplazos y aprobaciones diarias.
+La app ya está en fase de:
 
----
+curación
+criterio visual
+limpieza
+refinado
+13. LO QUE FALTA REALMENTE AHORA
+Bloque prioritario actual
+Cerrar prompt maestro de IA
+Cerrar estrategia visual definitiva
+Definir cuándo buscar / cuándo generar / cuándo subir manualmente
+Limpiar imágenes malas
+Audio español de apoyo
+Pulido UX final
+Lo que NO falta
+La base técnica principal ya está
+La sesión ya existe
+El Admin ya existe
+El sistema ya se puede usar
+14. PASO ACTUAL RECOMENDADO
 
-## 7. DECISIONES YA TOMADAS Y QUE NO QUIERO VOLVER A DISCUTIR
-- **Entorno Agente**: El proyecto se desarrolla con asistencia de *Antigravity*.
-- **Desarrollo Limpio**: No quiero tareas ni reescrituras inmensas manuales ni desarrollos de golpe en cascada.
-- **Hosting Definido**: El frontend y backend serverless es Vercel exclusivamente.
-- **Backend BD Definido**: La base de datos y almacenamiento es Supabase exclusivamente.
-- **Firebase Descartes**: Está eliminado, no hay vuelta atrás.
-- **Filosofía del Admin**: El panel Admin es y debe seguir siendo el epicentro local e indivisible de curación de contenidos.
-- **Método de Carga**: No quiero subir cientos de imágenes desde mi propio ordenador una a una. 
-- **Flujo Mixto Exigido**: 
-  1º Buscar candidatos vía API externa abierta. 
-  2º Generar por IA si la opción uno fracasa estéticamente. 
-  3º Seleccionar obligatoriamente a mano lo ideal. 
-  4º Todo debe terminar cristalizado en el Bucket `images` de Supabase sin URLs volátiles eternas.
-- **Decisión Estética Tomada**:
-  - Coherencia visual absoluta en toda la app.
-  - Cero fotografías del mundo real.
-  - Orientación innegociable a dibujos/ilustración infantil clara, tanto para el sustantivo material como para la orden ambigua verbal.
-- **Identidad Git Prometida**: Antes de abandonar el proyecto y ramificar a nuevas ideas de la empresa (Ej: "Normativas"), debe revisarse obligatoriamente la identidad GitHub local para configurarse como `Unzalss`.
+En la nueva ventana, el siguiente bloque debe ser:
 
----
+Objetivo
 
-## 8. OBJETIVO VISUAL Y FUNCIONAL DE IMÁGENES
-**Reglas de Oro del Arte Final:**
-- **Estilo**: Infantil, dibujo limpio e ilustración tierna/dócil.
-- **Fondo**: Limpio (transparente a la fuerza o blanco sólido rotundo).
-- **Composición**: Objeto central masivo u acción inconfundible y protagónica en el centro del marco.
-- **Contenido restado**: Sin textos, leyendas ni letras integradas. Sin realismo o ruido fotoperiodístico.
-- **Consistencia**: Un "coche" debe dar la misma sensación de acuarela/lápiz digital que una "manzana" o un niño "saltando".
-- **Legibilidad Cognitiva**: Deben ser indiscutiblemente descifrables por un niño menor sin capacidad de abstracción adulta o de doble sentido. Este mandato es extremadamente exigente en los casos de verbos abstractos o acciones corporales complejas.
+Cerrar definitivamente el sistema visual de imágenes
 
-**Flujo Funcional Interactivo Cerrado:**
-1. Panel Admin -> Click "Buscar 5".
-2. Evaluación visual exigente.
-3. Si el vector agrada -> Guardar.
-4. Si hay duda o discordancia visual -> Click "Generar 1".
-5. Si falla el prompt IA -> Click otra vez "Generar 1" (las opciones se apilan para comparación).
-6. Click en miniatura ganadora -> Click "Guardar seleccionada" (se hace fetch transparente, se sube a Supabase y se enlazan datos).
-7. Sustituir sin piedad haciendo delete y re-ejecución si el estilo desentona con el grid general.
-
----
-
-## 9. PLAN CORRECTO A PARTIR DE AHORA
-*(Secuencia táctica para las próximas intervenciones recomendadas)*
-
-- **Bloque 1**: Auditar el estado real de imágenes actuales en `items` (identificar el caos visual inminente en Supabase).
-- **Bloque 2**: Revisar `api/generate-image.js` para asegurar que el modelo fijado, tamaño y el prompt exacto se acoplan a la regla inquebrantable expresada en el punto 8.
-- **Bloque 3**: Deliberar la estrategia general si Pixabay ("Buscar 5") merece su mantenimiento transversal o limitarse solo a un atajo de objetos fáciles frente a verbos.
-- **Bloque 4**: Cerrar bajo llave las palabras mágicas (prompt final) que obliguen a DALL-E a no variar de estilo para las próximas decenas de verbos.
-- **Bloque 5**: Atacar el reemplazo oficial y estandarización visual de las primeras 10-15 palabras de la base de datos semilla ('apple', 'banana', 'cat', 'dog', 'sit', etc.).
-- **Bloque 6**: Purgar las filas desfiguradas ("loremflickr", etc.) y eliminar basura temporal.
-- **Bloque 7**: Validar impacto lógico y económico de las generaciones IA tras completar la base base de datos real.
-- **Bloque 8**: Marcar el proyecto Admin como finalizado en etapa de herramienta de curación, blindándolo sin alteraciones adicionales.
-
----
-
-## 10. PASOS INMEDIATOS RECOMENDADOS
-- **¿Qué hay que hacer ahora mismo?**: Detenerse a leer este documento y reflexionar sobre la estética. Luego iniciar inmediatamente el **Bloque 1** del punto anterior revisando visualmente los ítems actuales para captar a simple vista su discordancia visual.
-- **¿Cuál es el siguiente bloque de código real?**: No es un componente React. Es abrir el archivo  `api/generate-image.js` y refinar el modelo JSON para clavar el Prompt de la directiva artística.
-- **¿Qué NO hay que tocar todavía?**: Ninguna lógica en `Session.jsx`, `Dashboard.jsx` o rutinas relacionadas al progreso, éxito y login. Sigue estando vetada la introducción masiva de código visual complejo.
-- **Riesgos latentes frente a errores**: Si en este punto se precipitan los estilos de prompt o se empieza a jugar indiscriminadamente con la Base de datos sin un criterio gráfico unificador final, la experiencia infantil de la App quedará arruinada estéticamente, impidiendo su comercialización futura seria, sumada a la penalización en peticiones API pagadas con IA errónea.
-
----
-
-## 11. GIT Y FLUJO DE TRABAJO
-- **Repositorio y Estructura Actual**: El puente de versiones local apunta a GitHub, el cual mediante Webhooks alimenta de forma impávida el despliegue automático hacia Vercel en la rama final. Todo guardado en el archivo `.gitignore` recién generado mantiene limpios los entornos ajenos `.env.local`.
-- **Identidad Futura Obligatoria**: Antes de cerrar en falsas promesas o migrar el cerebro al próximo proyecto masivo corporativo ("Normativas"), el archivo `~/.gitconfig` global exigirá conmutarse sin falta bajo la identidad **Unzals** (`git config --global user.name "Unzalss"`).
-- **Acuerdo de Regla de Desarrollo**: La arquitectura total debe canalizarse a través de directrices y mandatos controlados vía **Antigravity**. Toda improvisación manual o sobrescritura unilateral al margen rompe el hilo conductor del rastreo de bloques.
+Lo que hay que pedir
+revisar api/generate-image.js
+cerrar prompt maestro
+dejar estilo consistente
+documentar estrategia final:
+buscar
+generar
+subida manual
+Lo que NO hay que tocar
+no tocar Session
+no tocar Dashboard
+no rehacer Admin
+no cambiar stack
+no crear nuevas features grandes
+15. GIT Y FLUJO
+GitHub + Vercel despliegue automático
+Mantener flujo pequeño y controlado
+Antes de volver a Normativas u otros proyectos:
+revisar identidad Git hacia Unzalss
